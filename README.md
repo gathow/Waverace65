@@ -11,7 +11,7 @@ Progress:
 Camera free movement (temporary)
 Model loading (.obj only which is fine)
 
-To do;
+To do:
 Create jet ski model 
 Make the camera follow the model from behind
 Make the model move by input instead of camera
