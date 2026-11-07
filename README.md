@@ -8,11 +8,12 @@ Aims for project:
 - Cross platform Online play with P2P connection.
 
 Progress:
-- Camera free movement (temporary)
+- Camera fixed to object, currently Tuna, WILL BE CHANGED
 - Model loading (.obj only which is fine)
+- Easy to use Struct for model loading.
 
 To do:
 - Create jet ski model 
-- Make the camera follow the model from behind
-- Make the model move by input instead of camera
+- Make the camera follow the model from behind (DONE)
+- Make the model move by input instead of camera (DONE)
 - Add water
