@@ -280,6 +280,7 @@ glViewport(0, 0, fbWidth, fbHeight);
 Shader ourShader("vertexshader.vs", "fragmentshader.fs");
 Object tuna = CreateObject("Tuna", "Tuna-bl.obj", "Tuna_texture.png");
 Object cube = CreateObject("Cube", "cube.obj", "Zuko.jpg");
+Object cube2 = CreateObject("Cube", "cube.obj", "Zuko.jpg");
 Water water = CreateWater("water.jpg", 500, 200, 100.0f, 100.0f);
 
 //All rendering in here
@@ -326,6 +327,7 @@ updateWater(water, currentFrame);
 drawWater(water, modelLoc, 0.0f, 0.0f, 0.0f);
 drawObject(tuna, modelLoc, playerPos.x, playerPos.y + waterY, playerPos.z, playerYaw);
 drawObject(cube, modelLoc, 2.0f, 1.0f, 0.0f);
+drawObject(cube2, modelLoc, 6.0f, -0.1f + waterY, 0.0f);
 //Buffer swap
 glfwSwapBuffers(window);
 glfwPollEvents();    
