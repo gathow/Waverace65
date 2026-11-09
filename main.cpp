@@ -2,7 +2,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <vector>
-#include <iostream>
 
 #include "tiny_obj_loader.h"
 #include "stb_image.h"
@@ -29,16 +28,6 @@ vec3 followOffset = vec3(0.0f, 4.0f, -8.0f);
 vec3 cameraPos   = vec3(0.0f, 0.0f, 3.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, 1.0f);
 vec3 cameraUp    = vec3(0.0f, 1.0f,  0.0f);
-vec3 up = vec3(0.0f, 1.0f, 0.0f); 
-vec3 cameraTarget = vec3(0.0f, 0.0f, 0.0f);
-vec3 cameraDirection = normalize(cameraPos - cameraTarget);
-vec3 cameraRight = normalize(cross(up, cameraDirection));
-bool firstMouse = true;
-float cameraYaw   = -90.0f;
-float cameraPitch =  0.0f;
-float lastX =  800.0f / 2.0;
-float lastY =  600.0 / 2.0;
-float fov   =  45.0f;
 
 struct Vertex {
     float x, y, z;
@@ -55,55 +44,14 @@ struct Object {
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    glViewport(0, 0, width, height);
-}  
-
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
-{
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
-
-    if (firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-    lastX = xpos;
-    lastY = ypos;
-
-    float sensitivity = 0.1f; // change this value to your liking
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
-
-    cameraYaw += xoffset;
-    cameraPitch += yoffset;
-
-    // make sure that when cameraPitch is out of bounds, screen doesn't get flipped
-    if (cameraPitch > 89.0f)
-        cameraPitch = 89.0f;
-    if (cameraPitch < -89.0f)
-        cameraPitch = -89.0f;
-
-    vec3 front;
-    front.x = cos(radians(cameraYaw)) * cos(radians(cameraPitch));
-    front.y = sin(radians(cameraPitch));
-    front.z = sin(radians(cameraYaw)) * cos(radians(cameraPitch));
-    vec3 cameraFront = normalize(vec3(0.0f, -0.25f, -1.0f));
-
+    fbWidth = width;
+    fbHeight = height;
+    glViewport(0, 0, fbWidth, fbHeight);
 }
+ 
 
 void processInput(GLFWwindow *window)
 {
-
-vec3 direction;
-direction.x = cos(radians(cameraYaw)) * cos(radians(cameraPitch));
-direction.y = sin(radians(cameraPitch));
-direction.z = sin(radians(cameraYaw)) * cos(radians(cameraPitch));
-
 
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -216,8 +164,6 @@ glfwMakeContextCurrent(window);
 gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
  
 glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-glfwSetCursorPosCallback(window, mouse_callback);
-glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); 
 
 glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
 glViewport(0, 0, fbWidth, fbHeight);
@@ -243,8 +189,6 @@ ourShader.use();
 ourShader.setInt("texture1", 0);
 
 //View Matrix
-
-mat4 model = translate(mat4(1.0f), playerPos);
 mat4 viewmatrix    = mat4(1.0f);
 mat4 perspectiveprojection    = mat4(1.0f);
 
