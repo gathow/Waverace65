@@ -4,3 +4,10 @@ flat square, 0,0,0 coords
 generate noise, change y level of points by 0.1 max
 cant just have 4 vertices as that wouldnt give wave effect, perhaps a plane with 10x10 grid to test
 cant be complete noise, needs to have some rythm, maybe wave starting point is random and it ripples from there
+
+
+Rotation:
+while holding a or d slowly rotate model
+
+float angle = glm::radians(45.0f);
+model = glm::rotate(model, angle, glm::vec3(0.0f, 1.0f, 0.0f)); // rotate around Y

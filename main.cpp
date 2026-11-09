@@ -23,8 +23,8 @@ float deltaTime = 0.0f;	// Time between current frame and last frame
 float lastFrame = 0.0f; // Time of last frame
 
 //Camera
-
-vec3 playerPos = vec3(0.0f, -1.0f, 0.0f);
+float playerYaw = 0.0f;
+vec3 playerPos = vec3(0.0f, -1.7f, 0.0f);
 vec3 followOffset = vec3(0.0f, 6.0f, -8.0f);
 vec3 cameraPos   = vec3(0.0f, 0.0f, 3.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, 1.0f);
@@ -58,24 +58,29 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     glViewport(0, 0, fbWidth, fbHeight);
 }
  
+vec3 playerForward()
+{
+    return normalize(vec3(sin(playerYaw), 0.0f, cos(playerYaw)));
+}
 
 void processInput(GLFWwindow *window)
 {
 
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-
+    vec3 forward = playerForward();
+    float turnSpeed = radians(35.0f) * deltaTime;
     float playerSpeed = 2.5f * deltaTime;
-        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT ) == GLFW_PRESS)
-            playerSpeed *= 4.0f;
+
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-            playerPos += playerSpeed * cameraFront;
+            playerPos += forward * playerSpeed;
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-            playerPos -= playerSpeed * cameraFront;
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-            playerPos -= normalize(cross(cameraFront, cameraUp)) * playerSpeed;
+            playerPos -= forward * playerSpeed;
+
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-            playerPos += normalize(cross(cameraFront, cameraUp)) * playerSpeed; 
+            playerYaw -= turnSpeed;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            playerYaw += turnSpeed;
 
 }
 
@@ -223,16 +228,22 @@ Object CreateObject(
     return object;
 }
 
-void drawObject(const Object& object,GLint modelLoc, float deltaX, float deltaY, float deltaZ) {
-    mat4 modelPos = translate(mat4(1.0f), vec3(deltaX, deltaY, deltaZ));
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(modelPos));
-    
+void drawObject(const Object& object, GLint modelLoc,
+                float x, float y, float z, float yaw = 0.0f)
+{
+    mat4 model(1.0f);
+    model = translate(model, vec3(x, y, z));
+    model = rotate(model, yaw, vec3(0.0f, 1.0f, 0.0f));
+
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, object.texture);
     glBindVertexArray(object.VAO);
     glDrawArrays(GL_TRIANGLES, 0, object.vertexCount);
     glBindVertexArray(0);
 }
+
 
 void drawWater(const Water& water, GLint modelLoc,
                float x, float y, float z)
@@ -269,7 +280,7 @@ glViewport(0, 0, fbWidth, fbHeight);
 Shader ourShader("vertexshader.vs", "fragmentshader.fs");
 Object tuna = CreateObject("Tuna", "Tuna-bl.obj", "Tuna_texture.png");
 Object cube = CreateObject("Cube", "cube.obj", "Zuko.jpg");
-Water water = CreateWater("water.jpg", 200, 200, 100.0f, 100.0f);
+Water water = CreateWater("water.jpg", 500, 200, 100.0f, 100.0f);
 
 //All rendering in here
 while(!glfwWindowShouldClose(window))
@@ -281,6 +292,7 @@ lastFrame = currentFrame;
 
 //Water Calcs
 float waterY = waveHeight(playerPos.x, playerPos.z, currentFrame);
+vec3 forward = playerForward();
 
 //input
 processInput(window);
@@ -293,7 +305,7 @@ ourShader.setInt("texture1", 0);
 mat4 viewmatrix    = mat4(1.0f);
 mat4 perspectiveprojection    = mat4(1.0f);
 
-cameraPos = playerPos + followOffset;
+cameraPos = playerPos - forward * 8.0f + vec3(0.0f, 6.0f, 0.0f);
 viewmatrix = lookAt(cameraPos, playerPos, cameraUp);
 perspectiveprojection = perspective(radians(45.0f), static_cast<float>(fbWidth) / static_cast<float>(fbHeight), 0.1f, 100.0f);
 
@@ -312,7 +324,7 @@ glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 ourShader.use();
 updateWater(water, currentFrame);
 drawWater(water, modelLoc, 0.0f, 0.0f, 0.0f);
-drawObject(tuna, modelLoc, playerPos.x, playerPos.y + waterY, playerPos.z);
+drawObject(tuna, modelLoc, playerPos.x, playerPos.y + waterY, playerPos.z, playerYaw);
 drawObject(cube, modelLoc, 2.0f, 1.0f, 0.0f);
 //Buffer swap
 glfwSwapBuffers(window);
