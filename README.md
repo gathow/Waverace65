@@ -11,6 +11,8 @@ Progress:
 - Camera fixed to object, currently Tuna, WILL BE CHANGED
 - Model loading (.obj only which is fine)
 - Easy to use Struct for model loading.
+- Easy to use function for creating and translating object.
+- MacOS support complete (as long as you have opengl)
 
 To do:
 - Create jet ski model 
