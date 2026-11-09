@@ -24,8 +24,8 @@ float lastFrame = 0.0f; // Time of last frame
 
 //Camera
 
-vec3 playerPos = vec3(0.0f, 0.0f, 0.0f);
-vec3 followOffset = vec3(0.0f, 4.0f, -8.0f);
+vec3 playerPos = vec3(0.0f, -1.0f, 0.0f);
+vec3 followOffset = vec3(0.0f, 6.0f, -8.0f);
 vec3 cameraPos   = vec3(0.0f, 0.0f, 3.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, 1.0f);
 vec3 cameraUp    = vec3(0.0f, 1.0f,  0.0f);
@@ -140,12 +140,18 @@ Water CreateWater(const string& textureFile, int cellsX, int cellsZ, float sizeX
     return water;
 }
 
+float waveHeight(float x, float z, float time)
+{
+    return 0.2f * sin(x * 2.0f + time * 1.5f)
+         + 0.1f * sin(z * 2.7f - time * 1.1f);
+}
+
+
 void updateWater(Water& water, float time)
 {
     for (Vertex& v : water.vertices) {
         // Use the original flat grid coordinates to calculate each wave.
-        v.y = 0.12f * sin(v.x * 2.0f + time * 1.5f)
-            + 0.08f * sin(v.z * 2.7f - time * 1.1f);
+        v.y = waveHeight(v.x, v.z, time);
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, water.VBO);
@@ -263,7 +269,8 @@ glViewport(0, 0, fbWidth, fbHeight);
 Shader ourShader("vertexshader.vs", "fragmentshader.fs");
 Object tuna = CreateObject("Tuna", "Tuna-bl.obj", "Tuna_texture.png");
 Object cube = CreateObject("Cube", "cube.obj", "Zuko.jpg");
-Water water = CreateWater("water.jpg", 100, 100, 10.0f, 10.0f);
+Water water = CreateWater("water.jpg", 200, 200, 100.0f, 100.0f);
+
 //All rendering in here
 while(!glfwWindowShouldClose(window))
 {
@@ -271,6 +278,9 @@ while(!glfwWindowShouldClose(window))
 float currentFrame = glfwGetTime();
 deltaTime = currentFrame - lastFrame;
 lastFrame = currentFrame;  
+
+//Water Calcs
+float waterY = waveHeight(playerPos.x, playerPos.z, currentFrame);
 
 //input
 processInput(window);
@@ -302,7 +312,7 @@ glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 ourShader.use();
 updateWater(water, currentFrame);
 drawWater(water, modelLoc, 0.0f, 0.0f, 0.0f);
-drawObject(tuna, modelLoc, playerPos.x, playerPos.y, playerPos.z);
+drawObject(tuna, modelLoc, playerPos.x, playerPos.y + waterY, playerPos.z);
 drawObject(cube, modelLoc, 2.0f, 1.0f, 0.0f);
 //Buffer swap
 glfwSwapBuffers(window);
