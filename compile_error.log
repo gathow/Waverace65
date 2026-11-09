@@ -1,0 +1,8 @@
+In file included from main.cpp:7:
+include/tiny_obj_loader.h: In function ‘constexpr void fast_float::loop_parse_if_eight_digits(const char*&, const char*, uint64_t&)’:
+include/tiny_obj_loader.h:3100:31: warning: call to non-‘constexpr’ function ‘typename tinyobj_ff::conditional<true, long long int, It>::type tinyobj_ff::distance(It, It) [with It = const char*; typename conditional<true, long long int, It>::type = long long int]’ [-Winvalid-constexpr]
+ 3100 |   while ((tinyobj_ff::distance(p, pend) >= 8) &&
+      |           ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~
+include/tiny_obj_loader.h:1431:1: note: ‘typename tinyobj_ff::conditional<true, long long int, It>::type tinyobj_ff::distance(It, It) [with It = const char*; typename conditional<true, long long int, It>::type = long long int]’ declared here
+ 1431 | distance(It first, It last) {
+      | ^~~~~~~~

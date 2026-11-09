@@ -2,6 +2,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <vector>
+#include <cmath>
 
 #include "tiny_obj_loader.h"
 #include "stb_image.h"
@@ -42,6 +43,14 @@ struct Object {
     GLsizei vertexCount = 0;
 };
 
+struct Water {
+    unsigned int VAO = 0;
+    unsigned int VBO = 0;
+    unsigned int texture = 0;
+    GLsizei vertexCount = 0;
+    vector<Vertex> vertices; // Original grid positions
+};
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     fbWidth = width;
@@ -68,6 +77,81 @@ void processInput(GLFWwindow *window)
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             playerPos += normalize(cross(cameraFront, cameraUp)) * playerSpeed; 
 
+}
+
+Water CreateWater(const string& textureFile, int cellsX, int cellsZ, float sizeX, float sizeZ)
+{
+    Water water;
+
+    // Triangle list: 2 triangles per grid cell, 3 vertices per triangle.
+    for (int z = 0; z < cellsZ; ++z) {
+        for (int x = 0; x < cellsX; ++x) {
+            float x0 = -sizeX * 0.5f + sizeX * x / cellsX;
+            float x1 = -sizeX * 0.5f + sizeX * (x + 1) / cellsX;
+            float z0 = -sizeZ * 0.5f + sizeZ * z / cellsZ;
+            float z1 = -sizeZ * 0.5f + sizeZ * (z + 1) / cellsZ;
+
+            float u0 = static_cast<float>(x) / cellsX;
+            float u1 = static_cast<float>(x + 1) / cellsX;
+            float v0 = static_cast<float>(z) / cellsZ;
+            float v1 = static_cast<float>(z + 1) / cellsZ;
+
+            // Two triangles forming this grid cell
+            water.vertices.push_back({x0, 0, z0, u0, v0});
+            water.vertices.push_back({x1, 0, z0, u1, v0});
+            water.vertices.push_back({x0, 0, z1, u0, v1});
+
+            water.vertices.push_back({x1, 0, z0, u1, v0});
+            water.vertices.push_back({x1, 0, z1, u1, v1});
+            water.vertices.push_back({x0, 0, z1, u0, v1});
+        }
+    }
+    int width, height, channels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* data = stbi_load(textureFile.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+
+    water.vertexCount = static_cast<GLsizei>(water.vertices.size());
+
+    glGenTextures(1, &water.texture);
+    glBindTexture(GL_TEXTURE_2D, water.texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(data);
+
+    glGenVertexArrays(1, &water.VAO);
+    glGenBuffers(1, &water.VBO);
+
+    glBindVertexArray(water.VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, water.VBO);
+    glBufferData(GL_ARRAY_BUFFER,
+                 water.vertices.size() * sizeof(Vertex),
+                 water.vertices.data(),
+                 GL_DYNAMIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<void*>(0));
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<void*>(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
+    return water;
+}
+
+void updateWater(Water& water, float time)
+{
+    for (Vertex& v : water.vertices) {
+        // Use the original flat grid coordinates to calculate each wave.
+        v.y = 0.12f * sin(v.x * 2.0f + time * 1.5f)
+            + 0.08f * sin(v.z * 2.7f - time * 1.1f);
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, water.VBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0,
+                    water.vertices.size() * sizeof(Vertex),
+                    water.vertices.data());
 }
 
 Object CreateObject(
@@ -144,6 +228,19 @@ void drawObject(const Object& object,GLint modelLoc, float deltaX, float deltaY,
     glBindVertexArray(0);
 }
 
+void drawWater(const Water& water, GLint modelLoc,
+               float x, float y, float z)
+{
+    mat4 model = translate(mat4(1.0f), vec3(x, y, z));
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
+
+    glBindVertexArray(water.VAO);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, water.texture);
+    glDrawArrays(GL_TRIANGLES, 0, water.vertexCount);
+    glBindVertexArray(0);
+}
+
 //MAIN CODE
 int main()
 {
@@ -166,7 +263,7 @@ glViewport(0, 0, fbWidth, fbHeight);
 Shader ourShader("vertexshader.vs", "fragmentshader.fs");
 Object tuna = CreateObject("Tuna", "Tuna-bl.obj", "Tuna_texture.png");
 Object cube = CreateObject("Cube", "cube.obj", "Zuko.jpg");
-
+Water water = CreateWater("water.jpg", 100, 100, 10.0f, 10.0f);
 //All rendering in here
 while(!glfwWindowShouldClose(window))
 {
@@ -203,6 +300,8 @@ glClearColor(0.3490f, 0.7569f, 0.9804f, 1.0f);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 ourShader.use();
+updateWater(water, currentFrame);
+drawWater(water, modelLoc, 0.0f, 0.0f, 0.0f);
 drawObject(tuna, modelLoc, playerPos.x, playerPos.y, playerPos.z);
 drawObject(cube, modelLoc, 2.0f, 1.0f, 0.0f);
 //Buffer swap
