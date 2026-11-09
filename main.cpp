@@ -15,7 +15,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 using namespace std;
-
+using namespace glm;
 int fbWidth, fbHeight;
 
 //Deltatime
@@ -24,18 +24,18 @@ float lastFrame = 0.0f; // Time of last frame
 
 //Camera
 
-glm::vec3 modelPos = glm::vec3(0.0f, 0.0f, 0.0f);
-glm::vec3 followOffset = glm::vec3(0.0f, 4.0f, -8.0f);
-glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f, 3.0f);
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, 1.0f);
-glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
-glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f); 
-glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
-glm::vec3 cameraDirection = glm::normalize(cameraPos - cameraTarget);
-glm::vec3 cameraRight = glm::normalize(glm::cross(up, cameraDirection));
+vec3 playerPos = vec3(0.0f, 0.0f, 0.0f);
+vec3 followOffset = vec3(0.0f, 4.0f, -8.0f);
+vec3 cameraPos   = vec3(0.0f, 0.0f, 3.0f);
+vec3 cameraFront = vec3(0.0f, 0.0f, 1.0f);
+vec3 cameraUp    = vec3(0.0f, 1.0f,  0.0f);
+vec3 up = vec3(0.0f, 1.0f, 0.0f); 
+vec3 cameraTarget = vec3(0.0f, 0.0f, 0.0f);
+vec3 cameraDirection = normalize(cameraPos - cameraTarget);
+vec3 cameraRight = normalize(cross(up, cameraDirection));
 bool firstMouse = true;
-float yaw   = -90.0f;
-float pitch =  0.0f;
+float cameraYaw   = -90.0f;
+float cameraPitch =  0.0f;
 float lastX =  800.0f / 2.0;
 float lastY =  600.0 / 2.0;
 float fov   =  45.0f;
@@ -79,46 +79,46 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     xoffset *= sensitivity;
     yoffset *= sensitivity;
 
-    yaw += xoffset;
-    pitch += yoffset;
+    cameraYaw += xoffset;
+    cameraPitch += yoffset;
 
-    // make sure that when pitch is out of bounds, screen doesn't get flipped
-    if (pitch > 89.0f)
-        pitch = 89.0f;
-    if (pitch < -89.0f)
-        pitch = -89.0f;
+    // make sure that when cameraPitch is out of bounds, screen doesn't get flipped
+    if (cameraPitch > 89.0f)
+        cameraPitch = 89.0f;
+    if (cameraPitch < -89.0f)
+        cameraPitch = -89.0f;
 
-    glm::vec3 front;
-    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front.y = sin(glm::radians(pitch));
-    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    glm::vec3 cameraFront = glm::normalize(glm::vec3(0.0f, -0.25f, -1.0f));
+    vec3 front;
+    front.x = cos(radians(cameraYaw)) * cos(radians(cameraPitch));
+    front.y = sin(radians(cameraPitch));
+    front.z = sin(radians(cameraYaw)) * cos(radians(cameraPitch));
+    vec3 cameraFront = normalize(vec3(0.0f, -0.25f, -1.0f));
 
 }
 
 void processInput(GLFWwindow *window)
 {
 
-glm::vec3 direction;
-direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-direction.y = sin(glm::radians(pitch));
-direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+vec3 direction;
+direction.x = cos(radians(cameraYaw)) * cos(radians(cameraPitch));
+direction.y = sin(radians(cameraPitch));
+direction.z = sin(radians(cameraYaw)) * cos(radians(cameraPitch));
 
 
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    float cameraSpeed = 2.5f * deltaTime;
+    float playerSpeed = 2.5f * deltaTime;
         if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT ) == GLFW_PRESS)
-            cameraSpeed *= 4.0f;
+            playerSpeed *= 4.0f;
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-            modelPos += cameraSpeed * cameraFront;
+            playerPos += playerSpeed * cameraFront;
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-            modelPos -= cameraSpeed * cameraFront;
+            playerPos -= playerSpeed * cameraFront;
         if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-            modelPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+            playerPos -= normalize(cross(cameraFront, cameraUp)) * playerSpeed;
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-            modelPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed; 
+            playerPos += normalize(cross(cameraFront, cameraUp)) * playerSpeed; 
 
 }
 
@@ -131,10 +131,7 @@ Object CreateObject(
     object.name = objectName;
 
     tinyobj::ObjReader reader;
-    if (!reader.ParseFromFile(modelFile)) {
-        cerr << "OBJ load error: " << reader.Error() << '\n';
-        return object; // VAO is still 0, so caller can detect failure
-    }
+    reader.ParseFromFile(modelFile);
 
     const auto& attrib = reader.GetAttrib();
     const auto& shapes = reader.GetShapes();
@@ -194,16 +191,28 @@ Object CreateObject(
     return object;
 }
 
+void drawObject(const Object& object,GLint modelLoc, float deltaX, float deltaY, float deltaZ) {
+    mat4 modelPos = translate(mat4(1.0f), vec3(deltaX, deltaY, deltaZ));
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(modelPos));
+    
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, object.texture);
+    glBindVertexArray(object.VAO);
+    glDrawArrays(GL_TRIANGLES, 0, object.vertexCount);
+    glBindVertexArray(0);
+}
+
+//MAIN CODE
 int main()
 {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); 
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
-GLFWwindow* window = glfwCreateWindow(800, 400, "LearnOpenGL", NULL, NULL);
+GLFWwindow* window = glfwCreateWindow(800, 400, "WaveRace65", NULL, NULL);
 glfwMakeContextCurrent(window);
-
 gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
  
 glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -235,21 +244,20 @@ ourShader.setInt("texture1", 0);
 
 //View Matrix
 
-glm::mat4 model = glm::translate(glm::mat4(1.0f), modelPos);
-glm::mat4 viewmatrix    = glm::mat4(1.0f);
-glm::mat4 perspectiveprojection    = glm::mat4(1.0f);
+mat4 model = translate(mat4(1.0f), playerPos);
+mat4 viewmatrix    = mat4(1.0f);
+mat4 perspectiveprojection    = mat4(1.0f);
 
-cameraPos = modelPos + followOffset;
-viewmatrix = glm::lookAt(cameraPos, modelPos, cameraUp);
-perspectiveprojection = glm::perspective(glm::radians(45.0f), static_cast<float>(fbWidth) / static_cast<float>(fbHeight), 0.1f, 100.0f);
+cameraPos = playerPos + followOffset;
+viewmatrix = lookAt(cameraPos, playerPos, cameraUp);
+perspectiveprojection = perspective(radians(45.0f), static_cast<float>(fbWidth) / static_cast<float>(fbHeight), 0.1f, 100.0f);
 
 //Transformation matrixes -> Shader
 int modelLoc = glGetUniformLocation(ourShader.ID, "model");
-glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 int viewLoc = glGetUniformLocation(ourShader.ID, "viewmatrix");
-glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(viewmatrix));
+glUniformMatrix4fv(viewLoc, 1, GL_FALSE, value_ptr(viewmatrix));
 int projectionLoc = glGetUniformLocation(ourShader.ID, "perspectiveprojection");
-glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(perspectiveprojection)); 
+glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(perspectiveprojection)); 
 
 //Rendering
 glEnable(GL_DEPTH_TEST); 
@@ -257,21 +265,8 @@ glClearColor(0.3490f, 0.7569f, 0.9804f, 1.0f);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 ourShader.use();
-glActiveTexture(GL_TEXTURE0);
-glBindTexture(GL_TEXTURE_2D, tuna.texture);
-glBindVertexArray(tuna.VAO);
-glDrawArrays(GL_TRIANGLES, 0, tuna.vertexCount);
-glBindVertexArray(0);
-
-glm::mat4 cubeModel = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(cubeModel));
-
-glActiveTexture(GL_TEXTURE0);
-glBindTexture(GL_TEXTURE_2D, cube.texture);
-glBindVertexArray(cube.VAO);
-glDrawArrays(GL_TRIANGLES, 0, cube.vertexCount);
-
-
+drawObject(tuna, modelLoc, playerPos.x, playerPos.y, playerPos.z);
+drawObject(cube, modelLoc, 2.0f, 1.0f, 0.0f);
 //Buffer swap
 glfwSwapBuffers(window);
 glfwPollEvents();    
