@@ -8,8 +8,9 @@
 #include "stb_image.h"
 #include <shader.h>
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include <switch.h>
+#include <EGL/egl.h>
+#include <GLES3/gl3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -51,6 +52,54 @@ struct Water {
     vector<Vertex> vertices; // Original grid positions
 };
 
+struct Window {
+    EGLDisplay display;
+    EGLContext context;
+    EGLSurface surface;
+};
+
+static void create_window(Window *w)
+{
+    w->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    if (!eglInitialize(w->display, NULL, NULL))
+        fail("eglInitialize");
+    eglBindAPI(EGL_OPENGL_ES_API);
+
+    const EGLint config_attributes[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_NONE,
+    };
+    EGLConfig config;
+    EGLint config_count;
+    if (!eglChooseConfig(w->display, config_attributes, &config, 1,
+                         &config_count) || config_count == 0)
+        fail("eglChooseConfig");
+
+    w->surface = eglCreateWindowSurface(w->display, config,
+                                        nwindowGetDefault(), NULL);
+    if (w->surface == EGL_NO_SURFACE)
+        fail("eglCreateWindowSurface");
+
+    const EGLint context_attributes[] = {EGL_CONTEXT_MAJOR_VERSION, 3,
+                                         EGL_NONE};
+    w->context = eglCreateContext(w->display, config, EGL_NO_CONTEXT,
+                                  context_attributes);
+    if (w->context == EGL_NO_CONTEXT)
+        fail("eglCreateContext");
+    eglMakeCurrent(w->display, w->surface, w->surface, w->context);
+}
+
+static void destroy_window(Window *w)
+{
+    eglMakeCurrent(w->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglDestroyContext(w->display, w->context);
+    eglDestroySurface(w->display, w->surface);
+    eglTerminate(w->display);
+}
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     fbWidth = width;
@@ -63,26 +112,24 @@ vec3 playerForward()
     return normalize(vec3(sin(playerYaw), 0.0f, cos(playerYaw)));
 }
 
-void processInput(GLFWwindow *window)
+void processInput(PadState& pad)
 {
+    padUpdate(&pad);
+    const u64 buttons = padGetButtons(&pad);
 
-    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-    vec3 forward = playerForward();
-    float turnSpeed = radians(35.0f) * deltaTime;
-    float playerSpeed = 2.5f * deltaTime;
+    const float playerSpeed = 2.5f * deltaTime;
+    const vec3 right = normalize(cross(cameraFront, cameraUp));
 
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-            playerPos += forward * playerSpeed;
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-            playerPos -= forward * playerSpeed;
-
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-            playerYaw -= turnSpeed;
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-            playerYaw += turnSpeed;
-
+    if (buttons & HidNpadButton_Up)
+        playerPos += playerSpeed * cameraFront;
+    if (buttons & HidNpadButton_Down)
+        playerPos -= playerSpeed * cameraFront;
+    if (buttons & HidNpadButton_Left)
+        playerPos -= playerSpeed * right;
+    if (buttons & HidNpadButton_Right)
+        playerPos += playerSpeed * right;
 }
+
 
 Water CreateWater(const string& textureFile, int cellsX, int cellsZ, float sizeX, float sizeZ)
 {
@@ -261,20 +308,17 @@ void drawWater(const Water& water, GLint modelLoc,
 //MAIN CODE
 int main()
 {
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); 
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+    padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+    PadState pad;
+    padInitializeDefault(&pad);
 
-GLFWwindow* window = glfwCreateWindow(800, 400, "WaveRace65", NULL, NULL);
-glfwMakeContextCurrent(window);
-gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
- 
-glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    Window window;
+    create_window(&window); // Use the Window struct and create_window()
+                            // function from your working EGL example.
 
-glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
-glViewport(0, 0, fbWidth, fbHeight);
+    eglQuerySurface(window.display, window.surface, EGL_WIDTH, &fbWidth);
+    eglQuerySurface(window.display, window.surface, EGL_HEIGHT, &fbHeight);
+    glViewport(0, 0, fbWidth, fbHeight);
 
 //MODEL LOADING
 Shader ourShader("vertexshader.vs", "fragmentshader.fs");
@@ -329,11 +373,12 @@ drawObject(tuna, modelLoc, playerPos.x, playerPos.y + waterY, playerPos.z, playe
 drawObject(cube, modelLoc, 2.0f, 1.0f, 0.0f);
 drawObject(cube2, modelLoc, 6.0f, -0.1f + waterY, 0.0f);
 //Buffer swap
-glfwSwapBuffers(window);
-glfwPollEvents();    
+eglSwapBuffers(window.display, window.surface);
+   
 
 }
 
-glfwTerminate();
+destroy_window(&window);
 return 0;
 }
+
