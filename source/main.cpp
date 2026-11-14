@@ -1,16 +1,20 @@
-#define GLFW_INCLUDE_NONE
 #define STB_IMAGE_IMPLEMENTATION
 #define TINYOBJLOADER_IMPLEMENTATION
+
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <vector>
 #include <cmath>
+
+#include <switch.h>
+#include <EGL/egl.h>
+#include <GLES3/gl3.h>
 
 #include "tiny_obj_loader.h"
 #include "stb_image.h"
 #include <shader.h>
 
-#include <switch.h>
-#include <EGL/egl.h>
-#include <GLES3/gl3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -58,6 +62,13 @@ struct Window {
     EGLSurface surface;
 };
 
+static void fail(const char* what)
+{
+    printf("%s failed (EGL error 0x%x)\n", what, eglGetError());
+    exit(1);
+}
+
+
 static void create_window(Window *w)
 {
     w->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
@@ -98,13 +109,6 @@ static void destroy_window(Window *w)
     eglDestroyContext(w->display, w->context);
     eglDestroySurface(w->display, w->surface);
     eglTerminate(w->display);
-}
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-    fbWidth = width;
-    fbHeight = height;
-    glViewport(0, 0, fbWidth, fbHeight);
 }
  
 vec3 playerForward()
@@ -311,7 +315,7 @@ int main()
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     PadState pad;
     padInitializeDefault(&pad);
-
+    romfsInit();
     Window window;
     create_window(&window); // Use the Window struct and create_window()
                             // function from your working EGL example.
@@ -321,17 +325,25 @@ int main()
     glViewport(0, 0, fbWidth, fbHeight);
 
 //MODEL LOADING
-Shader ourShader("vertexshader.vs", "fragmentshader.fs");
-Object tuna = CreateObject("Tuna", "Tuna-bl.obj", "Tuna_texture.png");
-Object cube = CreateObject("Cube", "cube.obj", "Zuko.jpg");
-Object cube2 = CreateObject("Cube", "cube.obj", "Zuko.jpg");
-Water water = CreateWater("water.jpg", 500, 200, 100.0f, 100.0f);
+Shader ourShader("romfs:/vertexshader.vs", "romfs:/fragmentshader.fs");
+Object tuna = CreateObject(
+    "Tuna", "romfs:/Tuna-bl.obj", "romfs:/Tuna_texture.png");
+Object cube = CreateObject(
+    "Cube", "romfs:/cube.obj", "romfs:/Zuko.jpg");
+Object cube2 = CreateObject(
+    "Cube", "romfs:/cube.obj", "romfs:/Zuko.jpg");
+Water water = CreateWater("romfs:/water.jpg", 500, 200, 100.0f, 100.0f);
 
 //All rendering in here
-while(!glfwWindowShouldClose(window))
+for (unsigned frame = 0; appletMainLoop(); ++frame)
 {
+    padUpdate(&pad);
+
+    if (padGetButtonsDown(&pad) & HidNpadButton_Plus)
+        break;
+
 //Time calculation
-float currentFrame = glfwGetTime();
+float currentFrame = frame / 60.0f;
 deltaTime = currentFrame - lastFrame;
 lastFrame = currentFrame;  
 
@@ -340,7 +352,7 @@ float waterY = waveHeight(playerPos.x, playerPos.z, currentFrame);
 vec3 forward = playerForward();
 
 //input
-processInput(window);
+processInput(pad);
 
 //Shader
 ourShader.use();
