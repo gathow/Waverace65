@@ -3,6 +3,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 #include "tiny_obj_loader.h"
 #include "stb_image.h"
@@ -13,6 +14,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/constants.hpp>
+
 
 using namespace std;
 using namespace glm;
@@ -21,14 +24,19 @@ int fbWidth, fbHeight;
 //Deltatime
 float deltaTime = 0.0f;	// Time between current frame and last frame
 float lastFrame = 0.0f; // Time of last frame
-
 //Camera
 float playerYaw = 0.0f;
 vec3 playerPos = vec3(0.0f, -1.7f, 0.0f);
-vec3 followOffset = vec3(0.0f, 6.0f, -8.0f);
+vec3 followOffset = vec3(-2.0f, 4.5f, -10.0f);
 vec3 cameraPos   = vec3(0.0f, 0.0f, 3.0f);
 vec3 cameraFront = vec3(0.0f, 0.0f, 1.0f);
 vec3 cameraUp    = vec3(0.0f, 1.0f,  0.0f);
+
+float playerSpeed = 0.0f;
+const float maxPlayerSpeed = 8.0f;
+const float acceleration = 0.7f;
+const float deceleration = 3.0f;
+
 
 struct Vertex {
     float x, y, z;
@@ -48,7 +56,16 @@ struct Water {
     unsigned int VBO = 0;
     unsigned int texture = 0;
     GLsizei vertexCount = 0;
-    vector<Vertex> vertices; // Original grid positions
+    vector<Vertex> vertices;
+    vector<Vertex> baseVertices; // Undeformed grid positions
+};
+
+struct GerstnerWave {
+    vec2 direction;  // Normalized direction of travel
+    float amplitude;
+    float wavelength;
+    float speed;
+    float steepness;
 };
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -66,22 +83,26 @@ vec3 playerForward()
 void processInput(GLFWwindow *window)
 {
 
-    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
+    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
+    
     vec3 forward = playerForward();
-    float turnSpeed = radians(35.0f) * deltaTime;
-    float playerSpeed = 2.5f * deltaTime;
+    float turnSpeed = radians(50.0f) * deltaTime;
 
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-            playerPos += forward * playerSpeed;
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-            playerPos -= forward * playerSpeed;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        playerSpeed = std::min(playerSpeed + acceleration * deltaTime, maxPlayerSpeed);
+            else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+                playerSpeed = std::max(playerSpeed - acceleration * deltaTime, -maxPlayerSpeed);
+                    else if (playerSpeed > 0.0f)
+                        playerSpeed = std::max(0.0f, playerSpeed - deceleration * deltaTime);
+    else
+        playerSpeed = std::min(0.0f, playerSpeed + deceleration * deltaTime);
 
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-            playerYaw -= turnSpeed;
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-            playerYaw += turnSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        playerYaw -= turnSpeed;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        playerYaw += turnSpeed;
 
+    playerPos += playerForward() * playerSpeed * deltaTime;
 }
 
 Water CreateWater(const string& textureFile, int cellsX, int cellsZ, float sizeX, float sizeZ)
@@ -114,9 +135,9 @@ Water CreateWater(const string& textureFile, int cellsX, int cellsZ, float sizeX
     int width, height, channels;
     stbi_set_flip_vertically_on_load(true);
     unsigned char* data = stbi_load(textureFile.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-
+    water.baseVertices = water.vertices;
     water.vertexCount = static_cast<GLsizei>(water.vertices.size());
-
+    
     glGenTextures(1, &water.texture);
     glBindTexture(GL_TEXTURE_2D, water.texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
@@ -145,18 +166,47 @@ Water CreateWater(const string& textureFile, int cellsX, int cellsZ, float sizeX
     return water;
 }
 
-float waveHeight(float x, float z, float time)
+const vector<GerstnerWave> waves = {
+    { normalize(vec2( 1.0f,  0.25f)), 0.22f, 7.0f, 1.4f, 0.55f },
+    { normalize(vec2(-0.45f,  1.0f)), 0.12f, 4.0f, 1.8f, 0.45f },
+    { normalize(vec2( 0.7f, -1.0f)), 0.06f, 2.5f, 2.2f, 0.35f }
+};
+
+vec3 gerstnerPosition(float x, float z, float time)
 {
-    return 0.2f * sin(x * 2.0f + time * 1.5f)
-         + 0.1f * sin(z * 2.7f - time * 1.1f);
+    vec3 position(x, 0.0f, z);
+
+    for (const GerstnerWave& wave : waves) {
+        const float k = 2.0f * pi<float>() / wave.wavelength;
+        const float phase =
+            k * dot(wave.direction, vec2(x, z)) - wave.speed * time;
+
+        const float waveHeight = wave.amplitude * sin(phase);
+        const float horizontalDisplacement =
+            wave.steepness * wave.amplitude * cos(phase);
+
+        position.x += wave.direction.x * horizontalDisplacement;
+        position.z += wave.direction.y * horizontalDisplacement;
+        position.y += waveHeight;
+    }
+
+    return position;
 }
 
+float gerstnerHeight(float x, float z, float time)
+{
+    return gerstnerPosition(x, z, time).y;
+}
 
 void updateWater(Water& water, float time)
 {
-    for (Vertex& v : water.vertices) {
-        // Use the original flat grid coordinates to calculate each wave.
-        v.y = waveHeight(v.x, v.z, time);
+    for (size_t i = 0; i < water.vertices.size(); ++i) {
+        const Vertex& base = water.baseVertices[i];
+        const vec3 p = gerstnerPosition(base.x, base.z, time);
+
+        water.vertices[i].x = p.x;
+        water.vertices[i].y = p.y;
+        water.vertices[i].z = p.z;
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, water.VBO);
@@ -164,6 +214,7 @@ void updateWater(Water& water, float time)
                     water.vertices.size() * sizeof(Vertex),
                     water.vertices.data());
 }
+
 
 Object CreateObject(
     const string& objectName,
@@ -292,11 +343,12 @@ deltaTime = currentFrame - lastFrame;
 lastFrame = currentFrame;  
 
 //Water Calcs
-float waterY = waveHeight(playerPos.x, playerPos.z, currentFrame);
 vec3 forward = playerForward();
 
 //input
 processInput(window);
+float PlayerwaterY = gerstnerHeight(playerPos.x, playerPos.z, currentFrame);
+float ObjectWaterY = gerstnerHeight(6.0f, 0.0f, currentFrame);
 
 //Shader
 ourShader.use();
@@ -306,7 +358,8 @@ ourShader.setInt("texture1", 0);
 mat4 viewmatrix    = mat4(1.0f);
 mat4 perspectiveprojection    = mat4(1.0f);
 
-cameraPos = playerPos - forward * 8.0f + vec3(0.0f, 6.0f, 0.0f);
+cameraPos = playerPos - forward * (-followOffset.z) + vec3(0.0f, followOffset.y, 0.0f);
+
 viewmatrix = lookAt(cameraPos, playerPos, cameraUp);
 perspectiveprojection = perspective(radians(45.0f), static_cast<float>(fbWidth) / static_cast<float>(fbHeight), 0.1f, 100.0f);
 
@@ -316,18 +369,22 @@ int viewLoc = glGetUniformLocation(ourShader.ID, "viewmatrix");
 glUniformMatrix4fv(viewLoc, 1, GL_FALSE, value_ptr(viewmatrix));
 int projectionLoc = glGetUniformLocation(ourShader.ID, "perspectiveprojection");
 glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(perspectiveprojection)); 
+int animateWaterLoc = glGetUniformLocation(ourShader.ID, "animateWater");
 
 //Rendering
 glEnable(GL_DEPTH_TEST); 
 glClearColor(0.3490f, 0.7569f, 0.9804f, 1.0f);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-ourShader.use();
-updateWater(water, currentFrame);
+glUniform1f(glGetUniformLocation(ourShader.ID, "time"), currentFrame);
+glUniform1i(animateWaterLoc, GL_TRUE);
 drawWater(water, modelLoc, 0.0f, 0.0f, 0.0f);
-drawObject(tuna, modelLoc, playerPos.x, playerPos.y + waterY, playerPos.z, playerYaw);
+
+glUniform1i(glGetUniformLocation(ourShader.ID, "animateWater"), GL_FALSE);
+drawObject(tuna, modelLoc, playerPos.x, playerPos.y + PlayerwaterY, playerPos.z, playerYaw);
 drawObject(cube, modelLoc, 2.0f, 1.0f, 0.0f);
-drawObject(cube2, modelLoc, 6.0f, -0.1f + waterY, 0.0f);
+drawObject(cube2, modelLoc, 6.0f, -0.1f + ObjectWaterY, 0.0f);
+
 //Buffer swap
 glfwSwapBuffers(window);
 glfwPollEvents();    
