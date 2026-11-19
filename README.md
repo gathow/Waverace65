@@ -8,6 +8,7 @@ Aims for project:
 - Cross platform Online play with P2P connection.
 
 Progress:
+- Works on Switch 2 fully
 - Camera fixed to object, currently Tuna, WILL BE CHANGED
 - Model loading (.obj only which is fine)
 - Easy to use Struct for model loading.
